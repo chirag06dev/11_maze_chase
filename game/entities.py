@@ -22,9 +22,20 @@ class Player:
         if self._valid(nr, walls, rows, cols): self.rect=nr
 
     def _valid(self, rect, walls, rows, cols):
-        for px,py in [(rect.left,rect.top),(rect.right-1,rect.top),(rect.left,rect.bottom-1),(rect.right-1,rect.bottom-1)]:
-            cr,cc=py//CELL,px//CELL
-            if not(0<=cr<rows and 0<=cc<cols): return False
+        # stay inside the grid
+        if rect.left < 0 or rect.top < 0 or rect.right > cols*CELL or rect.bottom > rows*CELL:
+            return False
+        # collide with the wall segments of every cell the rect overlaps
+        c0, c1 = rect.left//CELL, (rect.right-1)//CELL
+        r0, r1 = rect.top//CELL, (rect.bottom-1)//CELL
+        for r in range(r0, r1+1):
+            for c in range(c0, c1+1):
+                x, y = c*CELL, r*CELL
+                w = walls[r][c]
+                if w[0] and rect.colliderect(pygame.Rect(x-1, y-1, CELL+2, 3)): return False
+                if w[1] and rect.colliderect(pygame.Rect(x-1, y+CELL-1, CELL+2, 3)): return False
+                if w[2] and rect.colliderect(pygame.Rect(x+CELL-1, y-1, 3, CELL+2)): return False
+                if w[3] and rect.colliderect(pygame.Rect(x-1, y-1, 3, CELL+2)): return False
         return True
 
     def draw(self, screen):
