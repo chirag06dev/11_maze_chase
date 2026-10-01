@@ -44,6 +44,7 @@ class GameEngine:
         self.freeze_timer = 0
         self.caught = False
         self.won = False
+        self.score = 0
         self.start_ticks = pygame.time.get_ticks()  # restarts the speed clock
         self.speed_tier = 0
 
@@ -87,6 +88,8 @@ class GameEngine:
         self._update_freeze()
         if self.player.rect.colliderect(self.exit_rect):
             self.won = True
+        if not self.caught:
+            self.score += 1   # one point per frame the player is alive
 
     def draw(self):
         self.screen.fill((230, 220, 210))
@@ -119,6 +122,9 @@ class GameEngine:
         tier_lbl=self.small_font.render(tier_text,True,(255,200,80) if at_max else (200,200,200))
         self.screen.blit(tier_lbl,(8,ROWS*CELL+28))
 
+        surv_lbl=self.small_font.render(f"Survived: {self.score // 60}s",True,(200,200,200))
+        self.screen.blit(surv_lbl,(WIDTH-surv_lbl.get_width()-8,ROWS*CELL+28))
+
         if self.caught:
             self._overlay("CAUGHT!", (220,60,60))
         if self.won:
@@ -130,9 +136,11 @@ class GameEngine:
         surf.fill((0,0,0,140))
         self.screen.blit(surf,(0,0))
         msg=self.big_font.render(text,True,color)
+        score_lbl=self.font.render(f"Survived: {self.score // 60}s  (score {self.score})",True,(255,255,255))
         sub=self.font.render("Press R to Restart",True,(200,200,200))
-        self.screen.blit(msg,(WIDTH//2-msg.get_width()//2,ROWS*CELL//2-30))
-        self.screen.blit(sub,(WIDTH//2-sub.get_width()//2,ROWS*CELL//2+20))
+        self.screen.blit(msg,(WIDTH//2-msg.get_width()//2,ROWS*CELL//2-40))
+        self.screen.blit(score_lbl,(WIDTH//2-score_lbl.get_width()//2,ROWS*CELL//2+10))
+        self.screen.blit(sub,(WIDTH//2-sub.get_width()//2,ROWS*CELL//2+40))
 
     def run(self):
         running=True
