@@ -7,6 +7,14 @@ WIDTH = COLS * CELL
 HEIGHT = ROWS * CELL + 50
 FPS = 60
 
+TIER_MS = 15000        # speed up every 15 seconds
+INTERVAL_STEP = 2      # frames removed from move_interval per tier
+MIN_INTERVAL = 5       # move_interval never goes below this
+
+FREEZE_FRAMES = 300    # how long the power pellet freezes enemies
+PELLET_CELL = (ROWS//2, COLS//4)   # (row, col) where the pellet sits
+PELLET_RADIUS = 8
+
 class GameEngine:
     def __init__(self):
         pygame.init()
@@ -14,6 +22,7 @@ class GameEngine:
         pygame.display.set_caption("Maze Chase")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("monospace", 22)
+        self.small_font = pygame.font.SysFont("monospace", 18)
         self.big_font = pygame.font.SysFont("monospace", 38, bold=True)
         self.reset()
 
@@ -27,8 +36,16 @@ class GameEngine:
             Enemy(ROWS-1, 0),       # bottom-left
         ]
         self.exit_rect = pygame.Rect((COLS//2)*CELL+5, (ROWS//2)*CELL+5, CELL-10, CELL-10)
+        pr, pc = PELLET_CELL
+        self.pellet_center = (pc*CELL+CELL//2, pr*CELL+CELL//2)
+        self.pellet_rect = pygame.Rect(0, 0, PELLET_RADIUS*2, PELLET_RADIUS*2)
+        self.pellet_rect.center = self.pellet_center
+        self.pellet_active = True
+        self.freeze_timer = 0
         self.caught = False
         self.won = False
+        self.start_ticks = pygame.time.get_ticks()  # restarts the speed clock
+        self.speed_tier = 0
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -36,14 +53,38 @@ class GameEngine:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_r: self.reset()
         return True
 
+    def _update_speed(self):
+        elapsed = pygame.time.get_ticks() - self.start_ticks
+        target_tier = elapsed // TIER_MS
+        while self.speed_tier < target_tier:
+            self.speed_tier += 1
+            for enemy in self.enemies:
+                enemy.move_interval = max(MIN_INTERVAL, enemy.move_interval - INTERVAL_STEP)
+
+    def _update_freeze(self):
+        if self.freeze_timer > 0:
+            self.freeze_timer -= 1
+            if self.freeze_timer == 0:
+                for enemy in self.enemies:
+                    enemy.frozen = False
+
     def update(self):
         if self.caught or self.won: return
+        self._update_speed()
         keys = pygame.key.get_pressed()
         self.player.move(keys, self.walls, ROWS, COLS)
+
+        if self.pellet_active and self.player.rect.colliderect(self.pellet_rect):
+            self.pellet_active = False
+            self.freeze_timer = FREEZE_FRAMES
+            for enemy in self.enemies:
+                enemy.frozen = True
+
         for enemy in self.enemies:
             enemy.update(self.walls, self.player, ROWS, COLS)
             if self.player.rect.colliderect(enemy.rect):
                 self.caught = True
+        self._update_freeze()
         if self.player.rect.colliderect(self.exit_rect):
             self.won = True
 
@@ -61,13 +102,23 @@ class GameEngine:
         pygame.draw.rect(self.screen,(80,200,80),self.exit_rect,border_radius=4)
         lbl=self.font.render("EXIT",True,(20,80,20))
         self.screen.blit(lbl,(self.exit_rect.x+2,self.exit_rect.y+6))
+        if self.pellet_active:
+            pygame.draw.circle(self.screen,(255,220,0),self.pellet_center,PELLET_RADIUS)
+            pygame.draw.circle(self.screen,(200,160,0),self.pellet_center,PELLET_RADIUS,2)
         self.player.draw(self.screen)
         for enemy in self.enemies:
             enemy.draw(self.screen)
         hud=pygame.Rect(0,ROWS*CELL,WIDTH,50)
         pygame.draw.rect(self.screen,(30,30,50),hud)
         info=self.font.render("Reach EXIT before the enemy catches you!  R=Restart",True,(200,200,200))
-        self.screen.blit(info,(8,ROWS*CELL+14))
+        self.screen.blit(info,(8,ROWS*CELL+4))
+
+        interval = self.enemies[0].move_interval
+        at_max = interval <= MIN_INTERVAL
+        tier_text = f"Speed Tier: {self.speed_tier + 1}" + ("  (MAX)" if at_max else "")
+        tier_lbl=self.small_font.render(tier_text,True,(255,200,80) if at_max else (200,200,200))
+        self.screen.blit(tier_lbl,(8,ROWS*CELL+28))
+
         if self.caught:
             self._overlay("CAUGHT!", (220,60,60))
         if self.won:
